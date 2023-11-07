@@ -289,6 +289,7 @@ class TestRail {
             url,
             postData,
             (response) => {
+
                 ColorConsole.success(' Results sent to TestRail for run R' + runID + ': ' + testResults.map((r) => 'C' + r.getCaseId()));
 
                 if (this.isScreenshotsEnabled) {
