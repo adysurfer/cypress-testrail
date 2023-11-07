@@ -11,10 +11,14 @@ class TestData {
 
         this._durationMS = 0;
 
-        if (data.attempts !== undefined) {
-            data.attempts.forEach((attempt) => {
-                this._durationMS += attempt.wallClockDuration;
-            });
+        if (data.duration) {
+            this._durationMS = data.duration;
+        } else {
+            if (data.attempts !== undefined) {
+                data.attempts.forEach((attempt) => {
+                    this._durationMS += attempt.wallClockDuration;
+                });
+            }
         }
     }
 
@@ -28,6 +32,14 @@ class TestData {
 
     /**
      *
+     * @returns {*}
+     */
+    getState() {
+        return this._state;
+    }
+
+    /**
+     *
      * @returns {boolean}
      */
     isPassed() {
@@ -36,10 +48,18 @@ class TestData {
 
     /**
      *
-     * @returns {*}
+     * @returns {boolean}
      */
-    getState() {
-        return this._state;
+    isFailed() {
+        return this._state === 'failed';
+    }
+
+    /**
+     *
+     * @returns {boolean}
+     */
+    isSkipped() {
+        return this._state === 'pending';
     }
 
     /**

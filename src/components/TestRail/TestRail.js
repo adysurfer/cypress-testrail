@@ -75,15 +75,41 @@ class TestRail {
             '/update_run/' + runId,
             postData,
             () => {
-                ColorConsole.success('  TestRun updated in TestRail: R' + runId);
+                ColorConsole.success('TestRun updated in TestRail: R' + runId);
             },
             (statusCode, statusText, errorText) => {
-                ColorConsole.error('  Could not add TestRail test cases to run R' + runId + ': ' + statusCode + ' ' + statusText + ' >> ' + errorText);
+                ColorConsole.error('Could not add TestRail test cases to run R' + runId + ': ' + statusCode + ' ' + statusText + ' >> ' + errorText);
                 ColorConsole.debug('');
             }
         );
     }
+    /**
+    updateRun(runIds, caseIds) {
+    const promises = [];
+    const postData = {
+        include_all: false,
+        case_ids: caseIds
+    };
 
+    for (let i = 0; i < runIds.length; i++) {
+        const runId = runIds[i];
+        const promise = this.client.sendData(
+            '/update_run/' + runId,
+            postData,
+            () => {
+                ColorConsole.success('TestRun updated in TestRail: R' + runId);
+            },
+            (statusCode, statusText, errorText) => {
+                ColorConsole.error('Could not add TestRail test cases to run R' + runId + ': ' + statusCode + ' ' + statusText + ' >> ' + errorText);
+                ColorConsole.debug('');
+            }
+        );
+        promises.push(promise);
+    }
+
+    return Promise.all(promises);
+    }
+    */
      /**
      *
      * @param runId
@@ -100,15 +126,54 @@ class TestRail {
             '/update_run/' + runId,
             postData,
             () => {
-                ColorConsole.success('  TestRun metadata updated in TestRail for run: R' + runId);
+                ColorConsole.success('TestRun metadata updated for TestRail run: R' + runId);
             },
             (statusCode, statusText, errorText) => {
-                ColorConsole.error('  Could not update metadata of TestRail run R' + runId + ': ' + statusCode + ' ' + statusText + ' >> ' + errorText);
+                ColorConsole.error('Could not update metadata for TestRail run R' + runId + ': ' + statusCode + ' ' + statusText + ' >> ' + errorText);
                 ColorConsole.debug('');
             }
         );
     }
+    
+    /**
+    updateAfterRunMetadata(runIds, metadataAfterRun) {
+    const promises = runIds.map((runId) => {
+        const postData = {
+            description: metadataAfterRun,
+        };
 
+        return new Promise((resolve, reject) => {
+            this.client.sendData(
+                '/update_run/' + runId,
+                postData,
+                () => {
+                    ColorConsole.success('TestRun metadata updated in TestRail for run ID(s): R' + runId);
+                    resolve(); // Resolve the promise when the update is successful
+                },
+                (statusCode, statusText, errorText) => {
+                    ColorConsole.error('Could not update metadata for TestRail run ID(s) R' + runId + ': ' + statusCode + ' ' + statusText + ' >> ' + errorText);
+                    ColorConsole.debug('');
+                    reject(new Error('Update failed')); // Reject the promise when the update fails
+                }
+            );
+        });
+    });
+
+    // Use Promise.all to wait for all updates to complete
+    return Promise.all(promises)
+        .then(() => {
+            // All updates completed successfully
+            ColorConsole.success('All TestRun metadata updates completed successfully');
+        })
+        .catch((error) => {
+            // At least one update failed
+            ColorConsole.error('At least one TestRun metadata update failed');
+            throw error; // Propagate the error to the caller if needed
+        });
+    }
+    
+    */
+    
     /**
      *
      * @param runId
@@ -203,6 +268,8 @@ class TestRail {
             results: [],
         };
 
+        ColorConsole.debug(' TestRail >> Sending case results to run R' + runID + ': ' + testResults.map((r) => 'C' + r.getCaseId()));
+
         testResults.forEach((result) => {
             var resultEntry = {
                 case_id: result.getCaseId(),
@@ -222,7 +289,8 @@ class TestRail {
             url,
             postData,
             (response) => {
-                ColorConsole.success(' Results sent to TestRail for: ' + testResults.map((r) => 'C' + r.getCaseId()));
+
+                ColorConsole.success(' Results sent to TestRail for run R' + runID + ': ' + testResults.map((r) => 'C' + r.getCaseId()));
 
                 if (this.isScreenshotsEnabled) {
                     const allRequests = [];
@@ -259,7 +327,7 @@ class TestRail {
                 }
             },
             (statusCode, statusText, errorText) => {
-                ColorConsole.error('  Could not send list of TestRail results: ' + statusCode + ' ' + statusText + ' >> ' + errorText);
+                ColorConsole.error(' Could not send list of TestRail results: ' + statusCode + ' ' + statusText + ' >> ' + errorText);
                 ColorConsole.debug('');
             }
         );
