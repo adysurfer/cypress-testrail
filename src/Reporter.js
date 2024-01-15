@@ -47,7 +47,7 @@ class Reporter {
         this.closeRun = configService.shouldCloseRun();
         this.foundCaseIds = [];
 
-        this.statusConverter = new CypressStatusConverter(configService.getStatusPassed(), configService.getStatusFailed(), configService.getStatusSkipped());
+        this.statusConverter = new CypressStatusConverter(configService.getTestRailStatusPassed(), configService.getTestRailStatusFailed(), configService.getTestRailStatusSkipped());
 
         this.customComment = customComment !== undefined && customComment !== null ? customComment : '';
 
@@ -293,7 +293,7 @@ class Reporter {
                 }
             }
 
-            let comment = 'Tested by Cypress';
+            let comment = convertedTestResult.getTitle() ? convertedTestResult.getTitle() : 'Tested by Cypress';
 
             // this is already part of the run description
             // if it was created dynamically.
