@@ -1,4 +1,4 @@
-import CypressStatusConverter from '../../../src/services/CypressStatusConverter';
+const CypressStatusConverter = require('../../../src/services/CypressStatusConverter');
 
 const converter = new CypressStatusConverter(1, 5, 2);
 
@@ -21,4 +21,3 @@ test('Status UNKNOWN leads to negative number', () => {
     const statusID = converter.convertToTestRail('abc');
     expect(statusID).toBe(-1);
 });
-

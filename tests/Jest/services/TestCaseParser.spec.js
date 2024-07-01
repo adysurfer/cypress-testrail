@@ -1,7 +1,6 @@
-import TestCaseParser from '../../../src/services/TestCaseParser';
+const TestCaseParser = require('../../../src/services/TestCaseParser');
 
 const parser = new TestCaseParser();
-
 
 test('case id can be successfully extracted', () => {
     const result = parser.searchCaseId('C123: This is a test');

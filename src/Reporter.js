@@ -1,13 +1,14 @@
 const TestRail = require('./components/TestRail/TestRail');
 const TestCaseParser = require('./services/TestCaseParser');
 const Result = require('./components/TestRail/Result');
-const ConfigService = require('./services/ConfigService');
+const ConfigService = require('./services/Config/ConfigService');
 const TestData = require('./components/Cypress/TestData');
 const ColorConsole = require('./services/ColorConsole');
 const CypressStatusConverter = require('./services/CypressStatusConverter');
 const fs = require('fs');
 
 const packageData = require('../package.json');
+const FileWriter = require('./services/FileWriter');
 
 class Reporter {
     /**
@@ -20,6 +21,7 @@ class Reporter {
         this.on = on;
 
         this.testCaseParser = new TestCaseParser();
+        this.fileWriter = new FileWriter();
 
         /* eslint-disable no-undef */
         const configService = new ConfigService(config.env);
@@ -42,6 +44,7 @@ class Reporter {
         this.screenshotsEnabled = configService.isScreenshotsEnabled();
         this.includeAllCasesDuringCreation = configService.includeAllCasesDuringCreation();
         this.includeAllFailedScreenshots = configService.includeAllFailedScreenshots();
+        this.ignorePendingTests = configService.ignorePendingCypressTests();
 
         this.modeCreateRun = !configService.hasRunID();
         this.closeRun = configService.shouldCloseRun();
@@ -65,10 +68,10 @@ class Reporter {
         if (!this.enabled) {
             ColorConsole.info('');
             ColorConsole.info('');
-            ColorConsole.warn('  TestRail Integration v' + packageData.version);
-            ColorConsole.warn('  ....................................................');
-            ColorConsole.warn('  Integration is not correctly configured.');
-            ColorConsole.warn('  If you expect this to work, please check your configuration.');
+            ColorConsole.warn('TestRail Integration v' + packageData.version);
+            ColorConsole.warn('....................................................');
+            ColorConsole.warn('Integration is not correctly configured.');
+            ColorConsole.warn('If you expect this to work, please check your configuration.');
             return;
         }
 
@@ -107,19 +110,20 @@ class Reporter {
         ColorConsole.info('  Testing Type (Tags): ' + this.tags);
 
         if (this.modeCreateRun) {
-            ColorConsole.info('  TestRail Mode: Create Run');
-            ColorConsole.info('  TestRail Project ID: ' + this.projectId);
-            ColorConsole.info('  TestRail Milestone ID: ' + this.milestoneId);
-            ColorConsole.info('  TestRail Suite ID: ' + this.suiteId);
-            ColorConsole.info('  TestRail Run Name: ' + this.runName);
-            ColorConsole.info('  TestRail Include All Cases: ' + this.includeAllCasesDuringCreation);
+            ColorConsole.info('TestRail Mode: Create Run');
+            ColorConsole.info('TestRail Project ID: ' + this.projectId);
+            ColorConsole.info('TestRail Milestone ID: ' + this.milestoneId);
+            ColorConsole.info('TestRail Suite ID: ' + this.suiteId);
+            ColorConsole.info('TestRail Run Name: ' + this.runName);
+            ColorConsole.info('TestRail Include All Cases: ' + this.includeAllCasesDuringCreation);
         } else {
-            ColorConsole.info('  TestRail Mode: Use existing Run(s)');
-            ColorConsole.info('  TestRail Run ID(s): ' + this.runIds.map((id) => 'R' + id));
+            ColorConsole.info('TestRail Mode: Use existing Run(s)');
+            ColorConsole.info('TestRail Run ID(s): ' + this.runIds.map((id) => 'R' + id));
         }
 
-        ColorConsole.info('  Screenshots: ' + this.screenshotsEnabled);
-        ColorConsole.info('  Include All Failed Screenshots: ' + this.includeAllFailedScreenshots);
+        ColorConsole.info('Ignore pending tests: ' + this.ignorePendingTests);
+        ColorConsole.info('Screenshots: ' + this.screenshotsEnabled);
+        ColorConsole.info('Include All Failed Screenshots: ' + this.includeAllFailedScreenshots);
 
         // if we don't have a runID, then we need to create one
         if (this.modeCreateRun) {
@@ -135,9 +139,9 @@ class Reporter {
      * @private
      */
     async _afterSpec(spec, results) {
-        // if we are in the mode to dynamically create runs
-        // then we also need to add the newly found runs to our created test run
-        // but only if we don't want to associate all cases during creation
+        // usually all test cases are assigned to runs that are created,
+        // but it's possible to turn off this feature, and only add
+        // test cases that have actually been executed by Cypress.
         if (this.modeCreateRun && !this.includeAllCasesDuringCreation) {
             for (let i = 0; i < results.tests.length; i++) {
                 const test = results.tests[i];
@@ -269,31 +273,27 @@ class Reporter {
         const allResults = [];
 
         for (let i = 0; i < results.tests.length; i++) {
-            const cypressTestResult = results.tests[i];
+            const cyTest = new TestData(results.tests[i]);
 
-            const convertedTestResult = new TestData(cypressTestResult);
-
-            // if we have a skipped test, then do NOT send it in create-mode
-            // only if we have an existing test run in TestRail
-            if (convertedTestResult.isSkipped() && this.modeCreateRun) {
-                ColorConsole.debug('  Skipping test: ' + convertedTestResult.getTitle());
+            if (cyTest.isPending() && this.ignorePendingTests) {
+                ColorConsole.debug('Ignoring pending test: ' + cyTest.getTitle());
                 continue;
             }
 
-            const testRailStatusID = this.statusConverter.convertToTestRail(convertedTestResult.getState());
+            const testRailStatusID = this.statusConverter.convertToTestRail(cyTest.getState());
 
             let screenshotPaths = [];
 
             // if we have a failed test, then extract the screenshot
-            if (convertedTestResult.isFailed()) {
-                screenshotPaths = this._getScreenshotByTestId(cypressTestResult.testId, convertedTestResult.getTitle(), results.screenshots);
+            if (cyTest.isFailed()) {
+                screenshotPaths = this._getScreenshotByTestId(cyTest.getId(), cyTest.getTitle(), results.screenshots);
 
                 if (screenshotPaths === null) {
                     screenshotPaths = [];
                 }
             }
 
-            let comment = convertedTestResult.getTitle() ? convertedTestResult.getTitle() : 'Tested by Cypress';
+            let comment = cyTest.getTitle() ? cyTest.getTitle() : 'Tested by Cypress';
 
             // this is already part of the run description
             // if it was created dynamically.
@@ -310,18 +310,18 @@ class Reporter {
                 }
             }
 
-            if (convertedTestResult.getError() !== '') {
-                comment += '\nError: ' + convertedTestResult.getError();
+            if (cyTest.getError() !== '') {
+                comment += '\nError: ' + cyTest.getError();
             }
 
-            const foundCaseIDs = this.testCaseParser.searchCaseId(convertedTestResult.getTitle());
+            const foundCaseIDs = this.testCaseParser.searchCaseId(cyTest.getTitle());
 
             // now build a separate result entry
             // for each found case id for TestRail later on
             for (let i = 0; i < foundCaseIDs.length; i++) {
                 const caseId = foundCaseIDs[i];
 
-                const result = new Result(caseId, testRailStatusID, comment, convertedTestResult.getDurationMS(), screenshotPaths);
+                const result = new Result(caseId, testRailStatusID, comment, cyTest.getDurationMS(), screenshotPaths);
 
                 allResults.push(result);
             }
@@ -363,11 +363,27 @@ class Reporter {
             description += '\n' + this.customComment;
         }
 
+        const me = this;
+
         await this.testrail.createRun(this.projectId, this.milestoneId, this.suiteId, runName, description, this.includeAllCasesDuringCreation, (runId) => {
             // run created
             this.runIds = [runId];
             /* eslint-disable no-console */
-            ColorConsole.debug('  New TestRail Run: R' + runId);
+            ColorConsole.debug('New TestRail Run: R' + runId);
+
+            // we need to write the runId to a file
+            // this allows developers to immediately fetch the new runID and
+            // use it for their own purposes
+            const data = {
+                id: runId,
+                name: runName,
+                description: description,
+                projectId: me.projectId,
+                milestoneId: me.milestoneId,
+                suiteId: me.suiteId,
+            };
+
+            me.fileWriter.write('created_run.json', JSON.stringify(data, null, 2));
         });
     }
 
