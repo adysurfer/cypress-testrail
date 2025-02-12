@@ -369,30 +369,25 @@ class Reporter {
      * @private
      */
     _getScreenshotByTestId(testId, testTitle, screenshots) {
-        // Helper function to extract a clean name from the screenshot path.
-        const extractScreenshotName = (filePath) => {
-            // Get the file name from the full path.
-            const fileName = filePath.split('/').pop();
-            // Remove the file extension.
-            let baseName = fileName.replace(/\.[^.]+$/, '');
-            // Remove any suffix starting with " (failed" and also remove any " (attempt ...)" suffix.
-            baseName = baseName.replace(/\s*\(failed.*$/i, '').replace(/\s*\(attempt.*\)$/i, '');
-            return baseName.trim();
-        };
-
-        // Optionally, you might want to clean up the test title as well
-        // (if your test title has extra spaces or formatting differences).
-        const cleanTestTitle = testTitle.trim();
+        // Extract a unique identifier from the test title.
+        // This will grab the first alphanumeric sequence that includes digits.
+        const idMatch = testTitle.match(/([A-Za-z]*\d+)/);
+        const uniqueIdentifier = idMatch ? idMatch[1].toLowerCase() : testTitle.toLowerCase();
 
         // Filter screenshots that belong to the current test.
         let filteredScreenshots = screenshots.filter(screenshot => {
-            // If a testId is provided on the screenshot, use that as the primary check.
+            // If the screenshot has a testId, use that for an exact match.
             if (screenshot.testId) {
                 return screenshot.testId === testId;
             } else {
-                // Otherwise, compare the cleaned-up screenshot name with the cleaned test title.
-                const screenshotName = extractScreenshotName(screenshot.path);
-                return screenshotName === cleanTestTitle;
+                // Otherwise, get the screenshot's file name.
+                const fileName = screenshot.path.split('/').pop();
+                // Remove the file extension.
+                let baseName = fileName.replace(/\.[^.]+$/, '');
+                // Remove suffixes like " (failed)" and " (attempt X)".
+                baseName = baseName.replace(/\s*\(failed.*$/i, '').replace(/\s*\(attempt.*\)$/i, '');
+                // Use a case-insensitive check: require the baseName to include the unique identifier.
+                return baseName.toLowerCase().includes(uniqueIdentifier);
             }
         });
 
@@ -401,12 +396,12 @@ class Reporter {
             screenshot.path.includes('(failed')
         );
 
-        // If you want to attach all matching screenshots, return them.
+        // If the option to include all failed screenshots is set, return them all.
         if (this.includeAllFailedScreenshots) {
             return filteredScreenshots;
         }
 
-        // Otherwise, choose the one with the highest attempt index (latest attempt).
+        // Otherwise, select the screenshot with the highest testAttemptIndex (latest attempt).
         let highestAttempt = -1;
         let latestScreenshot = null;
         filteredScreenshots.forEach(screenshot => {
