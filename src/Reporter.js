@@ -369,38 +369,46 @@ class Reporter {
      * @private
      */
     _getScreenshotByTestId(testId, testTitle, screenshots) {
-        // Filter screenshots to those that are for the current test.
+        // First, filter screenshots using testId if available.
         let filteredScreenshots = screenshots.filter(screenshot => {
             if (screenshot.testId) {
                 return screenshot.testId === testId;
             } else {
-                // Fallback: Use a stricter title match if testId is not available.
-                return screenshot.path.indexOf(testTitle) !== -1;
+                // Fallback: extract the base name from the screenshot filename
+                // and compare it strictly with the testTitle.
+                const pathParts = screenshot.path.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                // Remove the file extension.
+                let baseName = fileName.replace(/\.[^/.]+$/, "");
+                // Remove common suffixes like " (failed)" and " (attempt X)".
+                baseName = baseName.replace(/\s*\(failed.*\)/i, "").trim();
+                // Compare the cleaned base name with the test title.
+                return baseName === testTitle;
             }
         });
 
-        // Only keep screenshots for failed tests.
+        // Next, keep only the screenshots that indicate a failure.
         filteredScreenshots = filteredScreenshots.filter(screenshot =>
             screenshot.path.includes('(failed')
         );
 
-        // Return all failed screenshots if the flag is set.
+        // If the flag is set to include all failed screenshots, return them.
         if (this.includeAllFailedScreenshots) {
             return filteredScreenshots;
         }
 
-        // Otherwise, return the screenshot from the latest test attempt.
+        // Otherwise, select the screenshot with the highest attempt index.
         let highestAttempt = -1;
-        let latestScreenshot = [];
+        let latestScreenshot = null;
         filteredScreenshots.forEach(screenshot => {
             const currentAttempt = screenshot.testAttemptIndex || 0;
             if (currentAttempt > highestAttempt) {
                 highestAttempt = currentAttempt;
-                latestScreenshot = [screenshot];
+                latestScreenshot = screenshot;
             }
         });
 
-        return latestScreenshot;
+        return latestScreenshot ? [latestScreenshot] : [];
     }
 }
 
