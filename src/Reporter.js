@@ -369,38 +369,44 @@ class Reporter {
      * @private
      */
     _getScreenshotByTestId(testId, testTitle, screenshots) {
-        // Helper: remove non-alphanumeric characters and lowercase the string.
-        const sanitize = (str) => str.toLowerCase().replace(/[\W_]+/g, "");
+        // Helper function to extract a clean name from the screenshot path.
+        const extractScreenshotName = (filePath) => {
+            // Get the file name from the full path.
+            const fileName = filePath.split('/').pop();
+            // Remove the file extension.
+            let baseName = fileName.replace(/\.[^.]+$/, '');
+            // Remove any suffix starting with " (failed" and also remove any " (attempt ...)" suffix.
+            baseName = baseName.replace(/\s*\(failed.*$/i, '').replace(/\s*\(attempt.*\)$/i, '');
+            return baseName.trim();
+        };
 
-        // First, filter screenshots for the current test.
+        // Optionally, you might want to clean up the test title as well
+        // (if your test title has extra spaces or formatting differences).
+        const cleanTestTitle = testTitle.trim();
+
+        // Filter screenshots that belong to the current test.
         let filteredScreenshots = screenshots.filter(screenshot => {
-            // If a testId is available, use it for an exact match.
+            // If a testId is provided on the screenshot, use that as the primary check.
             if (screenshot.testId) {
                 return screenshot.testId === testId;
             } else {
-                // Otherwise, extract the base file name from the screenshot path.
-                const pathParts = screenshot.path.split('/');
-                const fileName = pathParts[pathParts.length - 1];
-                // Remove the file extension.
-                let baseName = fileName.replace(/\.[^/.]+$/, "");
-                // Remove suffixes like " (failed)" and " (attempt X)".
-                baseName = baseName.replace(/\s*\(failed.*$/i, "").trim();
-                // Compare the sanitized base name with the sanitized test title.
-                return sanitize(baseName) === sanitize(testTitle);
+                // Otherwise, compare the cleaned-up screenshot name with the cleaned test title.
+                const screenshotName = extractScreenshotName(screenshot.path);
+                return screenshotName === cleanTestTitle;
             }
         });
 
-        // Only keep screenshots that indicate a failure.
+        // Further restrict to screenshots that indicate a failure.
         filteredScreenshots = filteredScreenshots.filter(screenshot =>
             screenshot.path.includes('(failed')
         );
 
-        // If the option to include all failed screenshots is set, return them all.
+        // If you want to attach all matching screenshots, return them.
         if (this.includeAllFailedScreenshots) {
             return filteredScreenshots;
         }
 
-        // Otherwise, select the screenshot with the highest testAttemptIndex.
+        // Otherwise, choose the one with the highest attempt index (latest attempt).
         let highestAttempt = -1;
         let latestScreenshot = null;
         filteredScreenshots.forEach(screenshot => {
