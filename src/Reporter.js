@@ -369,35 +369,38 @@ class Reporter {
      * @private
      */
     _getScreenshotByTestId(testId, testTitle, screenshots) {
-        // First, filter screenshots using testId if available.
+        // Helper: remove non-alphanumeric characters and lowercase the string.
+        const sanitize = (str) => str.toLowerCase().replace(/[\W_]+/g, "");
+
+        // First, filter screenshots for the current test.
         let filteredScreenshots = screenshots.filter(screenshot => {
+            // If a testId is available, use it for an exact match.
             if (screenshot.testId) {
                 return screenshot.testId === testId;
             } else {
-                // Fallback: extract the base name from the screenshot filename
-                // and compare it strictly with the testTitle.
+                // Otherwise, extract the base file name from the screenshot path.
                 const pathParts = screenshot.path.split('/');
                 const fileName = pathParts[pathParts.length - 1];
                 // Remove the file extension.
                 let baseName = fileName.replace(/\.[^/.]+$/, "");
-                // Remove common suffixes like " (failed)" and " (attempt X)".
-                baseName = baseName.replace(/\s*\(failed.*\)/i, "").trim();
-                // Compare the cleaned base name with the test title.
-                return baseName === testTitle;
+                // Remove suffixes like " (failed)" and " (attempt X)".
+                baseName = baseName.replace(/\s*\(failed.*$/i, "").trim();
+                // Compare the sanitized base name with the sanitized test title.
+                return sanitize(baseName) === sanitize(testTitle);
             }
         });
 
-        // Next, keep only the screenshots that indicate a failure.
+        // Only keep screenshots that indicate a failure.
         filteredScreenshots = filteredScreenshots.filter(screenshot =>
             screenshot.path.includes('(failed')
         );
 
-        // If the flag is set to include all failed screenshots, return them.
+        // If the option to include all failed screenshots is set, return them all.
         if (this.includeAllFailedScreenshots) {
             return filteredScreenshots;
         }
 
-        // Otherwise, select the screenshot with the highest attempt index.
+        // Otherwise, select the screenshot with the highest testAttemptIndex.
         let highestAttempt = -1;
         let latestScreenshot = null;
         filteredScreenshots.forEach(screenshot => {
