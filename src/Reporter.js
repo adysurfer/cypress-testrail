@@ -369,39 +369,59 @@ class Reporter {
      * @private
      */
     _getScreenshotByTestId(testId, testTitle, screenshots) {
-        // Extract a unique identifier from the test title.
-        // This will grab the first alphanumeric sequence that includes digits.
-        const idMatch = testTitle.match(/([A-Za-z]*\d+)/);
-        const uniqueIdentifier = idMatch ? idMatch[1].toLowerCase() : testTitle.toLowerCase();
+        // Helper: extract a unique identifier from a string.
+        // This finds the first occurrence of letter(s) followed by digit(s)
+        const extractIdentifier = (str) => {
+            const match = str.match(/[A-Z]+\d+/i);
+            return match ? match[0].toLowerCase() : null;
+        };
 
-        // Filter screenshots that belong to the current test.
+        // Helper: extract a cleaned base name from a file path.
+        // Removes extension and trailing suffixes like " (failed)" or " (attempt X)".
+        const extractBaseName = (filePath) => {
+            const fileName = filePath.split('/').pop();
+            let baseName = fileName.replace(/\.[^/.]+$/, ""); // remove extension
+            // Remove trailing suffixes (case-insensitive)
+            baseName = baseName.replace(/\s*\(failed.*$/i, "").replace(/\s*\(attempt.*\)$/i, "").trim();
+            return baseName;
+        };
+
+        // Extract a unique identifier from the test title.
+        const titleIdentifier = extractIdentifier(testTitle);
+
+        // Filter the screenshots.
         let filteredScreenshots = screenshots.filter(screenshot => {
             // If the screenshot has a testId, use that for an exact match.
             if (screenshot.testId) {
                 return screenshot.testId === testId;
             } else {
-                // Otherwise, get the screenshot's file name.
-                const fileName = screenshot.path.split('/').pop();
-                // Remove the file extension.
-                let baseName = fileName.replace(/\.[^.]+$/, '');
-                // Remove suffixes like " (failed)" and " (attempt X)".
-                baseName = baseName.replace(/\s*\(failed.*$/i, '').replace(/\s*\(attempt.*\)$/i, '');
-                // Use a case-insensitive check: require the baseName to include the unique identifier.
-                return baseName.toLowerCase().includes(uniqueIdentifier);
+                // Otherwise, extract the base name from the screenshot's file path.
+                const baseName = extractBaseName(screenshot.path).toLowerCase();
+                // If we got a unique identifier from the test title, require that the screenshot's
+                // base name includes it.
+                if (titleIdentifier) {
+                    return baseName.includes(titleIdentifier);
+                }
+                // If no identifier could be extracted, fall back to a strict full-text check.
+                return baseName === testTitle.toLowerCase().trim();
             }
         });
 
-        // Further restrict to screenshots that indicate a failure.
+        // Further filter to only include screenshots that indicate a failure.
         filteredScreenshots = filteredScreenshots.filter(screenshot =>
-            screenshot.path.includes('(failed')
+            screenshot.path.toLowerCase().includes('(failed')
         );
 
-        // If the option to include all failed screenshots is set, return them all.
+        // Debug logging (optional)
+        // console.log('Test:', testTitle, 'Identifier:', titleIdentifier);
+        // console.log('Filtered Screenshots:', filteredScreenshots.map(s => s.path));
+
+        // If the flag to include all failed screenshots is set, return them.
         if (this.includeAllFailedScreenshots) {
             return filteredScreenshots;
         }
 
-        // Otherwise, select the screenshot with the highest testAttemptIndex (latest attempt).
+        // Otherwise, choose the screenshot with the highest attempt index (i.e. the latest attempt).
         let highestAttempt = -1;
         let latestScreenshot = null;
         filteredScreenshots.forEach(screenshot => {
