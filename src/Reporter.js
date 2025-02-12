@@ -404,6 +404,7 @@ class Reporter {
      * @returns {null}
      * @private
      */
+    /*
     _getScreenshotByTestId(testId, testTitle, screenshots) {
         var highestFoundAttemptId = -1;
         var foundScreenshots = [];
@@ -443,5 +444,44 @@ class Reporter {
         return this.includeAllFailedScreenshots ? foundScreenshots : highestFoundScreenshot;
     }
 }
+*/
+    _getScreenshotByTestId(testId, testTitle, screenshots) {
+      // First, filter screenshots to those that are for the current test.
+      // If screenshot.testId exists, use it for an exact match.
+      // Otherwise, fall back to matching the testTitle exactly (or as exactly as possible).
+      let filteredScreenshots = screenshots.filter(screenshot => {
+        if (screenshot.testId) {
+          return screenshot.testId === testId;
+        } else {
+          // When testId is not available (Cypress 13), use a stricter title match.
+          // For example, you can require the screenshot path to include the exact test title.
+          // You might need to sanitize testTitle if necessary.
+          return screenshot.path.indexOf(testTitle) !== -1;
+        }
+      });
+    
+      // Next, ensure that we only keep screenshots that are for a failed test.
+      filteredScreenshots = filteredScreenshots.filter(screenshot =>
+        screenshot.path.includes('(failed')
+      );
+    
+      // If you want all failed screenshots for this test, return them.
+      if (this.includeAllFailedScreenshots) {
+        return filteredScreenshots;
+      }
+    
+      // Otherwise, pick the screenshot from the latest test attempt.
+      let highestAttempt = -1;
+      let latestScreenshot = [];
+      filteredScreenshots.forEach(screenshot => {
+        const currentAttempt = screenshot.testAttemptIndex || 0;
+        if (currentAttempt > highestAttempt) {
+          highestAttempt = currentAttempt;
+          latestScreenshot = [screenshot];
+        }
+      });
+    
+      return latestScreenshot;
+    }
 
 module.exports = Reporter;
